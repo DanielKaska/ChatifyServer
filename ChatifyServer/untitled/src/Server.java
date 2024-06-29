@@ -42,25 +42,53 @@ public class Server {
         }
     }
 
-    static void SendMessages(String msg) throws IOException {
+    static void SendMessages(String message) throws IOException {
         for(var nick : map.keySet()){
             var client = map.get(nick);
-            msg = nick + ": " + msg;
             var writer = new PrintWriter(client.getOutputStream(), true);
-            writer.println(msg);
+            writer.println(message);
         }
     }
 
     private static volatile String input;
 
-    static String AcceptClients() {
+    static boolean IsNickAvailable(String nick){
+        if(map.get(nick) == null)
+            return true;
 
+        return false;
+    }
+
+    static String GetUsersAsString(){
+        String res = "";
+        for(var c : map.keySet()){
+            res += c;
+        }
+
+        return res;
+    }
+
+    static String AcceptClients() throws IOException {
+        Socket client = server.accept();
         Thread t = new Thread(() -> {
-            Socket client = null;
             try {
-                client = server.accept();
-                var in = new BufferedReader(new InputStreamReader(client.getInputStream()));
-                var nick = in.readLine();
+
+                var reader = new BufferedReader(new InputStreamReader(client.getInputStream()));
+                var nick = reader.readLine();
+
+                if(IsNickAvailable(nick)) {
+                    map.put(nick, client);
+                    SendMessages(nick + " joined the chat");
+                    do{
+                        try {
+                            input = reader.readLine();
+                            SendMessages(nick + ": " + input);
+
+                        } catch (Exception e) {
+                        }
+                    }while(input != null);
+                }
+
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -69,44 +97,35 @@ public class Server {
         });
 
         t.start();
-        /*if(map.get(nick) == null){
-            map.put(nick, client);
-            do{
-                try {
-                    input = in.readLine();
-                    System.out.println(input);
-                    SendMessages(input);
-                } catch (Exception e) {
-                }
-            }while(input != null);
-        }
-        return null;
-
-         */
         return "";
     }
 
     public static void main(String[] args) throws IOException{
         try{
             server = new ServerSocket(8080);
-
-
             CommandHandler();
 
             Thread mainThread = new Thread(() -> {
-               while(true){
-                   try {
-
-                       CheckConnection();
-                       System.out.println(" elo");
-                       AcceptClients();
-
-                   } catch (Exception e) {
-                       System.out.println(e.getMessage());
-                   }
-               }
+                while(true){
+                    try {
+                        AcceptClients();
+                    } catch (Exception e) {
+                        System.out.println(e.getMessage());
+                    }
+                }
             });
 
+            Thread thread2 = new Thread(() -> {
+                while(true){
+                    try {
+                        Thread.sleep(5000);
+                        CheckConnection();
+                        AcceptClients();
+
+                    }catch (Exception e) {System.out.println(e.getMessage());}
+                }
+            });
+            thread2.start();
             mainThread.start();
 
 

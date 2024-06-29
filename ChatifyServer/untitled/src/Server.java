@@ -1,4 +1,5 @@
 import javax.swing.plaf.basic.BasicComboBoxUI;
+import javax.swing.plaf.synth.SynthRadioButtonMenuItemUI;
 import java.io.*;
 import java.net.*;
 import java.util.*;
@@ -6,6 +7,8 @@ import java.util.*;
 
 public class Server {
     static Map<String, Socket> map = new HashMap<String, Socket>();
+
+    static ServerSocket server;
 
     static void CommandHandler(){
         Thread command = new Thread(() -> {
@@ -39,52 +42,72 @@ public class Server {
         }
     }
 
+    static void SendMessages(String msg) throws IOException {
+        for(var nick : map.keySet()){
+            var client = map.get(nick);
+            msg = nick + ": " + msg;
+            var writer = new PrintWriter(client.getOutputStream(), true);
+            writer.println(msg);
+        }
+    }
+
+    private static volatile String input;
+
+    static String AcceptClients() {
+
+        Thread t = new Thread(() -> {
+            Socket client = null;
+            try {
+                client = server.accept();
+                var in = new BufferedReader(new InputStreamReader(client.getInputStream()));
+                var nick = in.readLine();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+
+
+        });
+
+        t.start();
+        /*if(map.get(nick) == null){
+            map.put(nick, client);
+            do{
+                try {
+                    input = in.readLine();
+                    System.out.println(input);
+                    SendMessages(input);
+                } catch (Exception e) {
+                }
+            }while(input != null);
+        }
+        return null;
+
+         */
+        return "";
+    }
+
     public static void main(String[] args) throws IOException{
         try{
-            ServerSocket server = new ServerSocket(8080);
+            server = new ServerSocket(8080);
 
 
             CommandHandler();
 
-            while(true){
-                CheckConnection();
-                Socket client = server.accept();
+            Thread mainThread = new Thread(() -> {
+               while(true){
+                   try {
 
-                Thread t = new Thread(() -> {
-                    try{
-                        var in = new BufferedReader(new InputStreamReader(client.getInputStream()));
-                        var out = new PrintWriter(client.getOutputStream(), true);
+                       CheckConnection();
+                       System.out.println(" elo");
+                       AcceptClients();
 
-                        var nick = in.readLine();
+                   } catch (Exception e) {
+                       System.out.println(e.getMessage());
+                   }
+               }
+            });
 
-                        if(map.get(nick) == null){
-                            map.put(nick, client);
-                            String input;
-                            do{
-                                System.out.println(in.read());
-                                input = in.readLine();
-                                if(input == null){
-                                    client.close();
-                                    map.remove(client);
-                                    break;
-                                }
-                                out.println(nick + ": " + input);
-                            }while(input != null);
-
-
-                        }else{
-                            out.println("Nickname is already in use");
-                        }
-
-
-                    }catch(Exception e){
-                        System.out.println(e.getMessage());
-                    }
-                });
-
-                t.start();
-
-            }
+            mainThread.start();
 
 
         }catch(Exception e){
